@@ -1,0 +1,2 @@
+Python: hashlib.sha256(...).hexdigest()
+node.js: crypto.createHash('sha256').update(...).digest('hex')
