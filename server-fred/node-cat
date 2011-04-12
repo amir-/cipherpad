@@ -1,0 +1,42 @@
+#! /bin/sh
+#
+# Purpose: concatenate several .js files and run the result with node.
+#
+# Usage: ./node-cat file [file [file [...]]] [--] [arg [arg [...]]]
+#
+# Examples:
+# [1] ./node-cat mylib.js mylib-test.js
+# [2] ./node-cat mylib.js myapp.js 8181 /tmp/datadir
+# [3] ./node-cat mylib.js myapp.js -- /tmp/datafile
+
+filename=$(tempfile --suffix=.js)
+
+while true
+do
+  tmp="$1"
+  if test "${tmp}" = ""
+  then
+    break
+  fi
+  if test "${tmp}" = "--"
+  then
+    shift
+    break
+  fi
+  if test -f "${tmp}"
+  then
+    shift
+    wc -l "${tmp}" 1>&2
+    cat "${tmp}" >> "${filename}"
+  else
+    # file not found
+    break
+  fi
+done
+
+echo "--- running ---" 1>&2
+node "${filename}" "$@"
+echo "--- exiting ---" 1>&2
+
+# TODO: run this even if node gets a ctrl-C
+unlink "${filename}"

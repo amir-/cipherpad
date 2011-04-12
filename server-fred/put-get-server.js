@@ -14,11 +14,11 @@
  * Module imports.
  */
 var mod = {
-  // TODO: crypto: require('crypto'),
-  fs: require('fs'),
-  http: require('http'),
-  stream: require('stream'),
-  url: require('url'),
+  // TODO: crypto: require("crypto"),
+  fs: require("fs"),
+  http: require("http"),
+  stream: require("stream"),
+  url: require("url"),
 };
 
 /*
@@ -43,7 +43,7 @@ function emptyReply(num, req, res) {
  */
 function isValidFile(file) {
   // TODO: sanitize better.
-  return file.indexOf('..') == -1;
+  return file.indexOf("..") == -1;
 }
 
 /*
@@ -54,14 +54,30 @@ function isValidFile(file) {
  */
 function putFile(file, req, res) {
   if (isValidFile(file)) {
+    res.writeHead(200, { "Content-Type": "application/octet-stream" });
     var src = req;  // the request is a stream.
-    var dst = mod.fs.createWriteStream(kBlobDirectory + file);
-    dst.on('close', function() { res.end(); });
+    var opt = {/* encoding:"binary" */};
+    var dst = mod.fs.createWriteStream(kBlobDirectory + file, opt);
+    src.on("end", function() { res.end(); });
+    src.pipe(dst, {end: false});
     src.resume();
-    src.pipe(dst);
   } else {
     emptyReply(/* Not Found */ 404, req, res);
   }
+}
+
+/*
+ * Serves a static file.
+ * TODO: handle errors.
+ */
+function serveStatic(filename, mimetype, req, res) {
+  res.writeHead(200, { "Content-Type": mimetype });
+  var opt = {/* encoding:"binary" */};
+  var src = mod.fs.createReadStream(filename, opt);
+  var dst = res;  // the response is a stream.
+  src.on("end", function() { res.end(); });
+  src.pipe(dst, {end: false});
+  src.resume();
 }
 
 /*
@@ -72,11 +88,9 @@ function putFile(file, req, res) {
  */
 function getFile(file, req, res) {
   if (isValidFile(file)) {
-    var src = mod.fs.createReadStream(kBlobDirectory + file);
-    var dst = res;  // the response is a stream.
-    dst.on('close', function() { res.end(); });
-    src.resume();
-    src.pipe(dst);
+    serveStatic(kBlobDirectory + file,
+		"application/octet-stream",
+		req, res);
   } else {
     emptyReply(/* Bad Request */ 400, req, res);
   }
@@ -87,6 +101,7 @@ function getFile(file, req, res) {
  */
 function handleRequest(req, res) {
   console.log(req.method + " " + req.url);
+  // console.log(req.headers);
 
   // Parse the URL
   // href: /.../..?...
@@ -95,19 +110,41 @@ function handleRequest(req, res) {
   // query: ...
   var parsed = mod.url.parse(req.url);
 
-  if (req.method == "PUT") {
-    putFile(parsed.pathname, req, res);
-    return;
-  }
+  try {
+    // GET /client/<filename>
+    if ((req.method == "GET") && hasPrefix(parsed.pathname, "/client/")) {
+      var filename = parsed.pathname.substr(8);
+      var mimetype = guessMimetype(filename);
+      serveStatic("../client-fred/" + filename, mimetype, req, res);
+      return;
+    }
 
-  if (req.method == "GET") {
-    getFile(parsed.pathname, req, res);
-    return;
+    // GET /3rdparty/<filename>
+    if ((req.method == "GET") && hasPrefix(parsed.pathname, "/3rdparty/")) {
+      var filename = parsed.pathname.substr(10);
+      var mimetype = guessMimetype(filename);
+      serveStatic("../3rdparty/" + filename, mimetype, req, res);
+      return;
+    }
+
+    // PUT a blob.
+    if (req.method == "PUT") {
+      putFile(parsed.pathname, req, res);
+      return;
+    }
+
+    // GET a blob.
+    if (req.method == "GET") {
+      getFile(parsed.pathname, req, res);
+      return;
+    }
+  } catch (ex) {
+    console.log("*** unhandled exception ***");
   }
 
   // Anything else is an error.
-  res.writeHead(/* Bad Request */ 400, {'Content-Type': 'text/plain'});
-  res.write('Only GET and PUT are supported\n', /* encoding */ 'utf8');
+  res.writeHead(/* Bad Request */ 400, {"Content-Type": "text/plain"});
+  res.write("Only GET and PUT are supported\n", /* encoding */ "utf8");
   res.end();
 }
 
@@ -117,16 +154,16 @@ function handleRequest(req, res) {
 var port = 8124;
 if (process.argv.length >= 3)
   port = parseInt(process.argv[2]);
-console.log('listening on port', port);
+console.log("listening on port", port);
 
 kBlobDirectory = "blobdir/";
 if (process.argv.length >= 4)
   kBlobDirectory = process.argv[3];
-console.log('storing blobs in', kBlobDirectory);
+console.log("storing blobs in", kBlobDirectory);
 
 /*
  * Start service.
  */
 var server = mod.http.createServer(handleRequest);
 server.listen(port);
-console.log('ready');
+console.log("ready");

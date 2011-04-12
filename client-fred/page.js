@@ -1,145 +1,123 @@
-/* javascript */
+var app = app || {};  /* namespace */
 
-/*
- * Extend the byte array a by 16 - (a.length % 16) bytes, adding the value
- * a.length % 16 at the end.
- */
-function pad16(a)
+app.setStatus = function(color, text)
 {
-  // |****************|                | -> |****************|0000000000000000|
-  // |****************|***             | -> |****************|***0000000000003|
-  // |****************|*************** | -> |****************|***************f|
-  var n = a.length % 16;
-  return a.concat([0, 0, 0, 0, 0,
-		   0, 0, 0, 0, 0,
-		   0, 0, 0, 0, 0,
-		   n].slice(n));
+  app.status.innerHTML = '<span style="color:' + color + ';">' + text + '</span>';
+}
+
+app.onSaveClick = function()
+{
+  var cryp = new myAES(/* password */ app.client_secret.value);
+  var url = "/" + app.filename.value;
+
+  var text = app.textarea.value;
+  var bytes = cryp.encrypt(text);
+  var hex = bytesToHex(stringToPoints(bytes));
+
+  // console.log('text', text.length, text);
+  // console.log('bytes', bytes.length, bytes);
+  // console.log('hex', hex.length, hex);
+
+  app.setStatus("blue", "RPC...");
+  saveBlob(url, hex,
+	   function(ok) {
+	     if (ok) {
+	       app.setStatus("green", "saved");
+	     } else {
+	       app.setStatus("red", "error");
+	       // TODO: actually handle error.
+	     }
+	   });
+}
+
+app.onLoadClick = function()
+{
+  var cryp = new myAES(/* password */ app.client_secret.value);
+  var url = "/" + app.filename.value;
+
+  app.setStatus("blue", "RPC...");
+  loadBlob(url,
+	   function(hex) {
+	     if (hex != null) {
+	       var bytes = pointsToString(hexToBytes(hex));
+	       var text = cryp.decrypt(bytes);
+
+	       // console.log('hex', hex.length, hex);
+	       // console.log('bytes', bytes.length, bytes);
+	       // console.log('text', text.length, text);
+
+	       app.textarea.value = text;
+	       app.setStatus("green", "loaded");
+	     } else {
+	       app.setStatus("red", "error");
+	       // TODO: actually handle the error.
+	     }
+	   });
 }
 
 /*
- * Undo the effect of pad16().
+ * Invoked when pressing the 'clear' button.
+ * All state in the page is cleared.
  */
-function unpad16(b)
+app.onClearClick = function()
 {
-  var n = b[b.length - 1];  // n = a.length % 16
-  return b.slice(0, b.length - (16 - n));
+  app.server_secret.value = "";
+  app.client_secret.value = "";
+  app.filename.value = "";
+  app.textarea.value = "";
+  app.setStatus("green", "cleared");
 }
 
 /*
- * Unittest for pad16() and unpad16().
+ * Invoked when the <textarea> receives 'oninput' event, which
+ * happens on each keystroke that goes to the textarea.
  */
-function testPad16()
+app.onTextInput = function()
 {
-  for (var n = 0; n <= 100; ++n) {
-    var a = new Array(n);
-    for (var i = 0; i < n; ++i)
-      a[i] = Math.floor(Math.random() * 256);
-    var b = pad16(a);
-    test.assertEqual(b.length % 16, 0);
-    var c = unpad16(b);
-    for (var i = 0; i < n; ++i)
-      test.assertEqual(a[i], c[i]);
-  }
+  console.log("text input");
+  app.setStatus("red", "changed");
+}
+
+app.onTextChange = function()
+{
+  console.log("text change");
+  app.setStatus("red", "changed");
 }
 
 /*
- * Convert a string to an array of code points.
+ * Called on <body> load.
  */
-function stringToPoints(s)
+app.onBodyLoad = function()
 {
-  return s.split('').map(function(b) { return b.charCodeAt(0); });
-}
-/*
- * Convert an array of code points to a string.
- */
-function pointsToString(c)
-{
-  return c.map(function(x) { return String.fromCharCode(x); }).join('');
-}
+  // Get DOM nodes once and for all.
+  app.server_secret = document.getElementById("server_secret_id");
+  app.client_secret = document.getElementById("client_secret_id");
+  app.filename = document.getElementById("filename_id");
+  app.load_button = document.getElementById("load_button_id");
+  app.save_button = document.getElementById("save_button_id");
+  app.clear_button = document.getElementById("clear_button_id");
+  app.status = document.getElementById("status_id");
+  app.textarea = document.getElementById("textarea_id");
 
-/*
- * Unittest for stringToPoints() and pointsToString().
- */
-function testStringToPoints()
-{
-  var s = "ABC abc";
-  var c = stringToPoints(s);
-  var t = pointsToString(c);
-  test.assertEqualArray(s, t);
-}
+  app.load_button.onclick = app.onLoadClick;
+  app.save_button.onclick = app.onSaveClick;
+  app.clear_button.onclick = app.onClearClick;
 
-window.AES_xtime || AES_Init();  // one-time init.
+  app.setStatus("blue", "ready");
 
-/*
- * Constructor for AES encode/decoder taking a string password.
- */
-function myAES(password)
-{
-  // Use SHA256 to generate an expanded key from the password.
-  SHA256_init();
-  SHA256_write(password);
-  this.hash = SHA256_finalize();  // array of 32 bytes (256 bits).
-  AES_ExpandKey(this.hash);       // now it is an array of 240 bytes.
-}
-/*
- * 'blocks' should be an array of bytes of length divisible by 16.
- * It is modified in-place.
- */
-myAES.prototype.encrypt_bytes = function(blocks)
-{
-  for (var i = 0; i < blocks.length; i += 16) {
-    var block = blocks.slice(i, i + 16);
-    AES_Encrypt(block, this.hash);
-    for (var j = 0; j < 16; ++j)
-      blocks[i + j] = block[j];
-  }
-};
-myAES.prototype.decrypt_bytes = function(blocks)
-{
-  for (var i = 0; i < blocks.length; i += 16) {
-    var block = blocks.slice(i, i + 16);
-    AES_Decrypt(block, this.hash);
-    for (var j = 0; j < 16; ++j)
-      blocks[i + j] = block[j];
-  }
-};
-/*
- * string-to-string
- */
-myAES.prototype.encrypt = function(message)
-{
-  var bytes = pad16(stringToPoints(Utf8.encode(message)));
-  this.encrypt_bytes(bytes);
-  return pointsToString(bytes);
-};
-myAES.prototype.decrypt = function(message)
-{
-  var bytes = stringToPoints(message);
-  this.decrypt_bytes(bytes);
-  return Utf8.decode(pointsToString(unpad16(bytes)));
-};
+  app.textarea.oninput = app.onTextInput;  // delivered on each keystrokes.
+  app.textarea.onchange = app.onTextChange;  // delivered on loss of focus.
 
-////////////////////////////////////////////////////////////////////////////////
-
-function testTranscryption()
-{
-  var key = "fred";
-  var str = "This is the winter of our discontent.";
-
-  var aes = new myAES(key);
-
-  var bytes = pad16(stringToPoints(Utf8.encode(str)));
-  // console.log("bytes", bytes.length, bytes.slice());
-  aes.encrypt_bytes(bytes);
-  //console.log("bytes", bytes.length, bytes.slice());
-  var enc = pointsToString(bytes);
-  aes.decrypt_bytes(bytes);
-  // console.log("bytes", bytes.length, bytes.slice());
-  var out = Utf8.decode(pointsToString(unpad16(bytes)));
-  test.assertEqual(str, out);
-
-  var tmp = aes.encrypt(str);
-  test.assertEqual(tmp, enc);
-  tmp = aes.decrypt(tmp);
-  test.assertEqual(tmp, str);
+  window.onbeforeunload = function(e) {
+    // Clear the page before leaving, to make sure that going back
+    // does not reveal the information on the page. Could also make
+    // this auto-save or suggest saving unsaved changes.
+    app.onClearClick();
+    return null;
+    // if (true) {
+    //   return "leave page?";
+    // } else {
+    //   return null;
+    // }
+  };
 }
