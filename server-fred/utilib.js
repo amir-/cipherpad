@@ -20,6 +20,7 @@ function hasSuffix(str, sub) {
  */
 function guessMimetype(filename) {
   var tab = {
+    /* suffix: mimetype */
     ".css":  "text/css",
     ".html": "text/html",
     ".js":   "text/javascript",

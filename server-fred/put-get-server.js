@@ -14,7 +14,7 @@
  * Module imports.
  */
 var mod = {
-  // TODO: crypto: require("crypto"),
+  crypto: require("crypto"),
   fs: require("fs"),
   http: require("http"),
   stream: require("stream"),
@@ -34,16 +34,6 @@ var kBlobDirectory = null;
 function emptyReply(num, req, res) {
   res.writeHead(num, { /* no headers */ });
   res.end();
-}
-
-/*
- * Verifies that the given string is a valid filename for keeping blobs in.
- * Mostly this is about security, since blobs are kept in a sub-directory,
- * so we need to avoid things like ../../../etc/passwd as file names.
- */
-function isValidFile(file) {
-  // TODO: sanitize better.
-  return file.indexOf("..") == -1;
 }
 
 /*
@@ -82,7 +72,7 @@ function httpGetFile(filename, mimetype, req, res) {
 
 // Some pathnames are mapped to special static files.
 var static_files = {
-  /* pathname,       filename */
+  /* pathname:      filename */
   "/jsaes.js":      "../3rdparty/point-at-infinity.org/jsaes.js",
   "/jssha256.js":   "../3rdparty/point-at-infinity.org/jssha256.js",
   "/utf8.js":       "../3rdparty/www.movable-type.co.uk/utf8.js",
@@ -114,29 +104,33 @@ function handleRequest(req, res) {
     if ((req.method == "GET") && static_files[parsed.pathname]) {
       var filename = static_files[parsed.pathname];
       var mimetype = guessMimetype(filename);
-      httpGetFile("../client-fred/" + filename, mimetype, req, res);
+      httpGetFile(filename, mimetype, req, res);
       return;
     }
 
-    // PUT a blob.
-    if ((req.method == "PUT") && isValidFile(parsed.pathname)) {
-      httpPutFile(kBlobDirectory + parsed.pathname, req, res);
-      return;
-    }
+    if (true /* TODO: isBlobPath(..) */) {
+      // Hash the pathname to avoid ..s and slashes.
+      var hash = mod.crypto.createHash("md5").update(parsed.pathname).digest("hex");
+      var filename = kBlobDirectory + hash;
 
-    // GET a blob.
-    if ((req.method == "GET") && isValidFile(parsed.pathname)) {
-      httpGetFile(kBlobDirectory + parsed.pathname, "application/octet-stream", req, res);
-      return;
+      // PUT a blob?
+      if (req.method == "PUT") {
+	httpPutFile(filename, req, res);
+	return;
+      }
+
+      // GET a blob?
+      if (req.method == "GET") {
+	httpGetFile(filename, "application/octet-stream", req, res);
+	return;
+      }
     }
   } catch (ex) {
     console.log("*** unhandled exception ***");
   }
 
   // Anything else is an error.
-  res.writeHead(/* Bad Request */ 400, {"Content-Type": "text/plain"});
-  res.write("Only GET and PUT are supported\n", /* encoding */ "utf8");
-  res.end();
+  emptyReply(/* Bad Request */ 400, req, res);
 }
 
 /*
