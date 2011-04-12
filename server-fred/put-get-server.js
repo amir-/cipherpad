@@ -47,30 +47,30 @@ function isValidFile(file) {
 }
 
 /*
- * Handles PUT request for blobs.
+ * Serves a PUT request, writing the body to a file.
+ * TODO: handle errors.
  *
  * To exercise it:
  *   $ curl -T <filename> <url>
  */
-function putFile(file, req, res) {
-  if (isValidFile(file)) {
-    res.writeHead(200, { "Content-Type": "application/octet-stream" });
-    var src = req;  // the request is a stream.
-    var opt = {/* encoding:"binary" */};
-    var dst = mod.fs.createWriteStream(kBlobDirectory + file, opt);
-    src.on("end", function() { res.end(); });
-    src.pipe(dst, {end: false});
-    src.resume();
-  } else {
-    emptyReply(/* Not Found */ 404, req, res);
-  }
+function httpPutFile(filename, req, res) {
+  res.writeHead(200, { "Content-Type": "application/octet-stream" });
+  var src = req;  // the request is a stream.
+  var opt = {/* encoding:"binary" */};
+  var dst = mod.fs.createWriteStream(filename, opt);
+  src.on("end", function() { res.end(); });
+  src.pipe(dst, {end: false});
+  src.resume();
 }
 
 /*
- * Serves a static file.
+ * Serves a GET request, sending back a file.
  * TODO: handle errors.
+ *
+ * To exercise it:
+ *   $ curl -o <filename> <url>
  */
-function serveStatic(filename, mimetype, req, res) {
+function httpGetFile(filename, mimetype, req, res) {
   res.writeHead(200, { "Content-Type": mimetype });
   var opt = {/* encoding:"binary" */};
   var src = mod.fs.createReadStream(filename, opt);
@@ -78,22 +78,6 @@ function serveStatic(filename, mimetype, req, res) {
   src.on("end", function() { res.end(); });
   src.pipe(dst, {end: false});
   src.resume();
-}
-
-/*
- * Handles GET request for blobs.
- *
- * To exercise it:
- *   $ curl -o <filename> <url>
- */
-function getFile(file, req, res) {
-  if (isValidFile(file)) {
-    serveStatic(kBlobDirectory + file,
-		"application/octet-stream",
-		req, res);
-  } else {
-    emptyReply(/* Bad Request */ 400, req, res);
-  }
 }
 
 // Some pathnames are mapped to special static files.
@@ -126,23 +110,23 @@ function handleRequest(req, res) {
   var parsed = mod.url.parse(req.url);
 
   try {
-    // GET /some/file
+    // GET /path/name
     if ((req.method == "GET") && static_files[parsed.pathname]) {
       var filename = static_files[parsed.pathname];
       var mimetype = guessMimetype(filename);
-      serveStatic("../client-fred/" + filename, mimetype, req, res);
+      httpGetFile("../client-fred/" + filename, mimetype, req, res);
       return;
     }
 
     // PUT a blob.
-    if (req.method == "PUT") {
-      putFile(parsed.pathname, req, res);
+    if ((req.method == "PUT") && isValidFile(parsed.pathname)) {
+      httpPutFile(kBlobDirectory + parsed.pathname, req, res);
       return;
     }
 
     // GET a blob.
-    if (req.method == "GET") {
-      getFile(parsed.pathname, req, res);
+    if ((req.method == "GET") && isValidFile(parsed.pathname)) {
+      httpGetFile(kBlobDirectory + parsed.pathname, "application/octet-stream", req, res);
       return;
     }
   } catch (ex) {
