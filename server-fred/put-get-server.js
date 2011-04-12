@@ -96,6 +96,21 @@ function getFile(file, req, res) {
   }
 }
 
+// Some pathnames are mapped to special static files.
+var static_files = {
+  /* pathname,       filename */
+  "/jsaes.js":      "../3rdparty/point-at-infinity.org/jsaes.js",
+  "/jssha256.js":   "../3rdparty/point-at-infinity.org/jssha256.js",
+  "/utf8.js":       "../3rdparty/www.movable-type.co.uk/utf8.js",
+  "/test.js":       "../client-fred/test.js",
+  "/aes-crypto.js": "../client-fred/aes-crypto.js",
+  "/rpc.js":        "../client-fred/rpc.js",
+  "/rpc-test.html": "../client-fred/rpc-test.html",
+  "/page.html":     "../client-fred/page.html",
+  "/page.css":      "../client-fred/page.css",
+  "/page.js":       "../client-fred/page.js",
+};
+
 /*
  * Handles each HTTP request.
  */
@@ -111,19 +126,11 @@ function handleRequest(req, res) {
   var parsed = mod.url.parse(req.url);
 
   try {
-    // GET /client/<filename>
-    if ((req.method == "GET") && hasPrefix(parsed.pathname, "/client/")) {
-      var filename = parsed.pathname.substr(8);
+    // GET /some/file
+    if ((req.method == "GET") && static_files[parsed.pathname]) {
+      var filename = static_files[parsed.pathname];
       var mimetype = guessMimetype(filename);
       serveStatic("../client-fred/" + filename, mimetype, req, res);
-      return;
-    }
-
-    // GET /3rdparty/<filename>
-    if ((req.method == "GET") && hasPrefix(parsed.pathname, "/3rdparty/")) {
-      var filename = parsed.pathname.substr(10);
-      var mimetype = guessMimetype(filename);
-      serveStatic("../3rdparty/" + filename, mimetype, req, res);
       return;
     }
 
