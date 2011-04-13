@@ -76,14 +76,42 @@ var static_files = {
   "/jsaes.js":      "../3rdparty/point-at-infinity.org/jsaes.js",
   "/jssha256.js":   "../3rdparty/point-at-infinity.org/jssha256.js",
   "/utf8.js":       "../3rdparty/www.movable-type.co.uk/utf8.js",
-  "/test.js":       "../client-fred/test.js",
-  "/aes-crypto.js": "../client-fred/aes-crypto.js",
-  "/rpc.js":        "../client-fred/rpc.js",
-  "/rpc-test.html": "../client-fred/rpc-test.html",
-  "/page.html":     "../client-fred/page.html",
-  "/page.css":      "../client-fred/page.css",
-  "/page.js":       "../client-fred/page.js",
+  "/md5.js":        "../3rdparty/pajhome.org.uk/jshash-2.2/md5-min.js",
+  "/test.js":       "test.js",
+  "/aes-crypto.js": "aes-crypto.js",
+  "/rpc.js":        "rpc.js",
+  "/rpc-test.html": "rpc-test.html",
+  "/page.html":     "page.html",
+  "/page.css":      "page.css",
+  "/page.js":       "page.js",
 };
+
+/*
+ * We expect blob URLs to have a certain format.
+ *   /blob/<userhash>/<filehas>
+ * This function parses the pathname into an object
+ *   {userhash:"...", filehash:"..."}
+ * or returns null if the pathname is invalid.
+ *
+ * Both the "userhash" and "filehash" are expected to be MD5 hex digests.
+ */
+function parseBlobPathname(pathname)
+{
+  var p = /^\/blob\/([0-9a-f]+)\/([0-9a-f]+)$/.exec(pathname);
+  if (p) {
+    return {userhash:p[1], filehash:p[2]};
+  } else {
+    return null;
+  }
+}
+
+// /*
+//  * Returns the MD5 digest of a string in hex format.
+//  */
+// function md5hash(str)
+// {
+//   return mod.crypto.createHash("md5").update(str).digest("hex");
+// }
 
 /*
  * Handles each HTTP request.
@@ -108,10 +136,10 @@ function handleRequest(req, res) {
       return;
     }
 
-    if (true /* TODO: isBlobPath(..) */) {
-      // Hash the pathname to avoid ..s and slashes.
-      var hash = mod.crypto.createHash("md5").update(parsed.pathname).digest("hex");
-      var filename = kBlobDirectory + hash;
+    // PUT|GET /blob/<userhash>/<filehash>
+    var tmp = parseBlobPathname(parsed.pathname);
+    if (tmp) {
+      var filename = kBlobDirectory + tmp.userhash + "_" + tmp.filehash;
 
       // PUT a blob?
       if (req.method == "PUT") {

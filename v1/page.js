@@ -1,14 +1,35 @@
 var app = app || {};  /* namespace */
 
+/*
+ * Updates the color ("red", "green", etc) and text of the status <span>.
+ */
 app.setStatus = function(color, text)
 {
   app.status.innerHTML = '<span style="color:' + color + ';">' + text + '</span>';
-}
+};
 
+/*
+ * Flag that we flip to "true" whenever there changes to be saved.
+ */
+app.changes_to_save = false;
+
+/*
+ * Returns the blob URL currently implied by the page.
+ */
+app.makeBlobUrl = function()
+{
+  var userhash = hex_md5(app.username.value);
+  var filehash = hex_md5(app.filename.value);
+  return "/blob/" + userhash + "/" + filehash;
+};
+
+/*
+ * Invoked when the "save" button is clicked.
+ */
 app.onSaveClick = function()
 {
   var cryp = new myAES(/* password */ app.client_secret.value);
-  var url = "/" + app.filename.value;
+  var url = app.makeBlobUrl();
 
   var text = app.textarea.value;
   var bytes = cryp.encrypt(text);
@@ -23,17 +44,21 @@ app.onSaveClick = function()
 	   function(ok) {
 	     if (ok) {
 	       app.setStatus("green", "saved");
+	       app.changes_to_save = false;
 	     } else {
 	       app.setStatus("red", "error");
 	       // TODO: actually handle error.
 	     }
 	   });
-}
+};
 
+/*
+ * Invoked when the "load" button is clicked.
+ */
 app.onLoadClick = function()
 {
   var cryp = new myAES(/* password */ app.client_secret.value);
-  var url = "/" + app.filename.value;
+  var url = app.makeBlobUrl();
 
   app.setStatus("blue", "RPC...");
   loadBlob(url,
@@ -48,12 +73,13 @@ app.onLoadClick = function()
 
 	       app.textarea.value = text;
 	       app.setStatus("green", "loaded");
+	       app.changes_to_save = false;
 	     } else {
 	       app.setStatus("red", "error");
 	       // TODO: actually handle the error.
 	     }
 	   });
-}
+};
 
 /*
  * Invoked when pressing the 'clear' button.
@@ -61,12 +87,14 @@ app.onLoadClick = function()
  */
 app.onClearClick = function()
 {
+  app.changes_to_save = false;
   app.server_secret.value = "";
   app.client_secret.value = "";
+  app.username.value = "";
   app.filename.value = "";
   app.textarea.value = "";
   app.setStatus("green", "cleared");
-}
+};
 
 /*
  * Invoked when the <textarea> receives 'oninput' event, which
@@ -74,15 +102,19 @@ app.onClearClick = function()
  */
 app.onTextInput = function()
 {
-  console.log("text input");
   app.setStatus("red", "changed");
-}
+  app.changes_to_save = true;
+};
 
+/*
+ * Invoked when the text has changed, but usually not fired
+ * until focus is lost.
+ */
 app.onTextChange = function()
 {
-  console.log("text change");
   app.setStatus("red", "changed");
-}
+  app.changes_to_save = true;
+};
 
 /*
  * Called on <body> load.
@@ -92,11 +124,16 @@ app.onBodyLoad = function()
   // Get DOM nodes once and for all.
   app.server_secret = document.getElementById("server_secret_id");
   app.client_secret = document.getElementById("client_secret_id");
+
+  app.username = document.getElementById("username_id");
   app.filename = document.getElementById("filename_id");
+
   app.load_button = document.getElementById("load_button_id");
   app.save_button = document.getElementById("save_button_id");
   app.clear_button = document.getElementById("clear_button_id");
+
   app.status = document.getElementById("status_id");
+
   app.textarea = document.getElementById("textarea_id");
 
   app.load_button.onclick = app.onLoadClick;
@@ -120,4 +157,4 @@ app.onBodyLoad = function()
     //   return null;
     // }
   };
-}
+};
